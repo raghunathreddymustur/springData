@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'org.springframework', name: 'spring-context', version: '5.3.9'
+    implementation group: 'org.springframework', name: 'spring-core', version: '5.3.9'
+    implementation group: 'org.springframework', name: 'spring-jdbc', version: '5.3.9'
+    implementation group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.6.0'
+    implementation group: 'org.hsqldb', name: 'hsqldb', version: '2.5.0'
+}
+
+test {
+    useJUnitPlatform()
+}
