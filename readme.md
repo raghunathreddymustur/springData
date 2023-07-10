@@ -1,6 +1,11 @@
 Database Management
 -------------------
+dependencies
+------------
 
+
+Intro
+------
 1. Exceptions
    1. Checked
       1. Exception that is extending java.lang.Exception (expect
@@ -44,5 +49,34 @@ Database Management
          abstraction layer on top of Data Access APIs to
          avoid coupling with concrete implementation
          of Data Access APIs
+
+configure a DataSource
+----------------------
+1. DataSource
+   1. Data Source is represented by generic interface javax.sql.DataSource which represent any
+      data source for sql database
+   2. To configure data source in Spring you need to create a @Configuration class that will return
+      javax.sql.DataSource bean.
+   3. You can use for example following types of javax.sql.DataSource:
+   4. You can use for example following types of javax.sql.DataSource:
+         1. DriverManagerDataSource – basic JDBC driver connection source
+         2. BasicDataSource – Apache DBCP for Connection Pooling
+         3. ComboPooledDataSource - C3P0 for Connection Pool
+2. Configuration of Data Source in Spring is dependent on type of application that is
+   executed.
+   1. Type of execution:
+      1. `Standalone` – Data Source is configured in @Configuration class and is
+         created as a bean of one of supported data source types
+      2. `Spring Boot `– Data Source is configured through application.properties
+3. working with development/test databases, following beans are very useful:
+   1. EmbeddedDatabaseBuilder – allows to easily configure H2/HSQLDB embedded
+      database with schema/data initialization scripts
+   2. DataSourceInitializer / ResourceDatabasePopulator – allows to use
+      schema/data initialization scripts without usage of EmbeddedDatabaseBuilder
+
+4. Example
+   1. Using hsqldb in memory database
+   
+   
 
 
