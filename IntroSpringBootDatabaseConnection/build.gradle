@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter', version: '2.5.3'
+    implementation group: 'org.springframework', name: 'spring-jdbc', version: '5.3.9'
+    implementation group: 'org.hsqldb', name: 'hsqldb', version: '2.5.0'
+    implementation group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.6.0'
+
+
+
+
+
+
+}
+
+test {
+    useJUnitPlatform()
+}
