@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 
 @Repository
@@ -48,7 +49,7 @@ public class EmployeeDao {
     }
 
     @SneakyThrows
-    private Employee mapEmployee(ResultSet resultSet, int i) {
+    private Employee mapEmployee(ResultSet resultSet, int i) throws SQLException {
         return new Employee(
                 resultSet.getInt("employee_id"),
                 resultSet.getString("first_name"),

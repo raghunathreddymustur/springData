@@ -337,6 +337,183 @@ JDBC Template
       }
       }
       ```
+Jbbc Call backs
+   -------------
+1. Callback
+   1. A callback is a code or reference to the code that can be passed as an argument
+      to the method. This method will execute passed callback during execution.
+      1. On Java level callback can be:
+         1. Class that implements interface
+            Example
+            ![img_1.png](img_1.png)
+            ```java
+            // function that accepts callback
+            numbersEvaluator.evaluate(4, expressionEvaluator, valuePrinter);
+            
+            ExpressionEvaluator expressionEvaluator = new AddExpressionEvaluator();
+
+             ```
+         2. Anonymous class
+            ```java
+            ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator() {
+            @Override
+            public int evaluate(int a, int b) {
+                return a * b;
+            }
+            };
+             ```
+         3. Lambda expression – JDK 8
+               ````java
+            ExpressionEvaluator expressionEvaluator = (a, b) -> a + b;
+
+              ````
+         4. Reference Method – JDK 8
+            ```java
+            ExpressionEvaluator expressionEvaluator = this::powEvaluator;
+
+            ```
+2. Jdbc Template Callbacks that can be used with queries:
+   1. RowMapper
+      1. interface for processing ResultSet data on per-row basis,
+         implementation should call ResultSet.get*(..) methods, **but should not call
+         ResultSet.next()**, it should only extract values from current row and based on
+         those values should create object, which will be returned from mapRow method,
+         implementation is `usually stateless`.
+      2. implementing the `mapRow(ResultSet resultSet, int rowNum)` method
+      3. Example
+         ```java
+            //using RowMapper Interface
+            public List<Employee> getEmployeeList()
+            {
+            return jdbcTemplate.query("select employee_id, first_name, last_name, email, phone_number, hire_date,          salary from employee", new RowMapper<Employee>() {
+            @Override
+            public Employee mapRow(ResultSet resultSet, int rowNum) throws SQLException {
+            return new Employee(
+            resultSet.getInt("employee_id"),
+            resultSet.getString("first_name"),
+            resultSet.getString("last_name"),
+            resultSet.getString("email"),
+            resultSet.getString("phone_number"),
+            resultSet.getDate("hire_date"),
+            resultSet.getFloat("salary")
+            );
+            };
+            });
+            }
+
+
+         ```
+   2. RowCallbackHandler
+      1. interface for processing ResultSet data on a per-row
+         basis, implementation should call ResultSet.get*(..) methods, but should
+         **not call ResultSet.next()**, it should only extract values from current row,
+         implementation is usually `stateful`, it keeps accumulated data in some object,
+         processRow method from this class does not return any value, instead method
+         saves results into for example object field that will keep state
+      2. by implementing the `processRow(ResultSet)` method
+      3. Example
+         ```java
+         public float findAverageSalaryRowByRow() {
+         AverageSalaryRowCallbackHandler averageSalaryRowCallbackHandler = new AverageSalaryRowCallbackHandler();
+
+         jdbcTemplate.query(
+         "select salary from employee",
+         averageSalaryRowCallbackHandler
+         );
+
+         return averageSalaryRowCallbackHandler.getAverageSalary();
+         }
+         
+         //CallBack
+         class AverageSalaryRowCallbackHandler implements RowCallbackHandler {
+         private float salarySum = 0;
+         private int salariesCount = 0;
+
+         @Override
+         public void processRow(ResultSet rs) throws SQLException {
+         salarySum += rs.getFloat("salary");
+         ++salariesCount;
+         }
+
+         public float getAverageSalary() {
+         return salarySum / (float) salariesCount;
+         }
+         }
+
+         ```
+   3. ResultSetExtractor
+      1. – interface for processing entire ResultSet data, all
+         rows needs to be processed and implementation `should call ResultSet.next()`
+         method to move between rows, implementation is usually stateless,
+         implementation should not close ResultSet, it will be closed by Jdbc Template
+      2. should implement `extractData(ResultSet rs)` method
+      3. Example
+         ```java
+         //callback
+         class AverageSalaryResultSetExtractor implements ResultSetExtractor<Float> {
+         @Override
+         public Float extractData(ResultSet rs) throws SQLException, DataAccessException {
+         float salarySum = 0;
+         int salariesCount = 0;
+
+               while (rs.next()) {
+                   salarySum += rs.getFloat("salary");
+                   ++salariesCount;
+               }
+
+               return salarySum / (float) salariesCount;
+         }
+         }
+
+         ```
+         
+   4. Jdbc Template other Callbacks:
+      1. PreparedStatementCreator
+         1. should create PreparedStatement based on
+            Connection provided by JdbcTemplate, implementation should provide SQL
+            and parameters
+      2. PreparedStatementSetter
+         1. should set values on PreparedStatement
+            provided by JdbcTemplate, implementation should only set parameters, SQL will
+            be set by JdbcTemplate
+      3. Example of 
+         ```java
+         public int findEmployeeIdFromEmail(String email) {
+            return jdbcTemplate.query(
+            new PreparedStatementCreator() {
+            @Override
+            public PreparedStatement createPreparedStatement(Connection con) throws SQLException {
+            return con.prepareStatement("select employee_id from employee where email = ?");
+            }
+            },
+            new PreparedStatementSetter() {
+            @Override
+            public void setValues(PreparedStatement ps) throws SQLException {
+            ps.setString(1, email);
+            }
+            },
+            new ResultSetExtractor<Integer>() {
+            @Override
+         public Integer extractData(ResultSet rs) throws SQLException, DataAccessException {
+         if (rs.next())
+         return rs.getInt("employee_id");
+         else
+         throw new SQLException("Unable to find id based on email");
+         }
+         }
+         );
+         }
+         ```
+      4. CallableStatementCreator
+         1. should create CallableStatement based on
+            Connection provided by JdbcTemplate, implementation should provide SQL
+            and parameters
+      5. PreparedStatementCallback
+         1. used internally by JdbcTemplate –
+            generic interface allowing number of operations on single PreparedStatement
+      6. CallableStatementCallback 
+         1. used internally by JdbcTemplate –
+            generic interface allowing number of operations on single CallableStatement
 
 
 
