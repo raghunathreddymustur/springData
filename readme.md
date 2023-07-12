@@ -250,6 +250,93 @@ configure a DataSource
       ```
       
    
-   
+
+JDBC Template
+-------------
+1. Template design pattern 
+   1. Template design pattern is a behavioral design pattern that can be used to
+      encapsulate algorithm/main flow with it steps in a way to achieve steps
+      customization and shared code reusability. 
+   2. It is achieved by creating abstract
+      class that contains algorithm definition/main flow with shared code, and child
+      classes extending abstract class which are customizing step or steps of the
+      algorithm.
+   3. Note
+      1. Template design pattern can be used to achieve greater code reusability,
+         however since it is using inheritance, which is very strong relationship between
+         classes it can limit future flexibility of the system. You should use this pattern
+         with caution and you should analyze if strategy design pattern will not give you
+         similar results. Strategy uses composition instead of inheritance and in some
+         cases instead of using template method, strategy can be used to achieve code
+         reusability and also code flexibility.
+   4. Example
+      ![img.png](img.png)
+2. JDBC Template
+   1. Jdbc Template is a class located in org.springframework.jdbc.core package.
+      Goal of this class is to simplify use of JDBC by providing implementation of JDBC
+      workflow, leaving application to provide SQL statements and results extractions.
+   2. it cares of open, establishing and closing the connection. you have just provide the quiries to execute
+   3. Jdbc Template executes SQL queries or updates, initiates iteration over ResultSet,
+      ResultSet mapping, also it catches exceptions and translates them into generic
+      exceptions.
+   4. Code that interacts with Jdbc Template needs to provide implementation of callback
+      interfaces which allows specific steps of JDBC workflow customization:
+      1. PreparedStatementCreator
+      2. ResultSetExtractor
+      3. PreparedStatementSetter
+      4. RowMapper
+   5. Example
+      ```java
+      public class EmployeeDao {
+      private JdbcTemplate jdbcTemplate;
+
+      @Autowired
+      public void setDataSource(DataSource dataSource) {
+      jdbcTemplate = new JdbcTemplate(dataSource);
+      }
+
+      public List<Employee> findEmployees() {
+      return jdbcTemplate.query(
+      "select employee_id, first_name, last_name, email, phone_number, hire_date, salary from employee",
+      this::mapEmployee
+      );
+      }
+
+      public Employee findFirstHiredEmployee() {
+      return jdbcTemplate.queryForObject(
+      "select * from employee order by hire_date limit 1",
+      this::mapEmployee
+      );
+      }
+
+      public Employee findEmployeeWithHighestSalary() {
+      return jdbcTemplate.queryForObject(
+      "select * from employee order by salary desc limit 1",
+      this::mapEmployee
+      );
+      }
+
+      public int findEmployeesCount() {
+      return jdbcTemplate.queryForObject(
+      "select count(*) from employee",
+      Integer.class
+      );
+      }   
+
+      @SneakyThrows
+      private Employee mapEmployee(ResultSet resultSet, int i) {
+      return new Employee(
+      resultSet.getInt("employee_id"),
+      resultSet.getString("first_name"),
+      resultSet.getString("last_name"),
+      resultSet.getString("email"),
+      resultSet.getString("phone_number"),
+      resultSet.getDate("hire_date"),
+      resultSet.getFloat("salary")
+      );
+      }
+      }
+      ```
+
 
 

@@ -1,4 +1,5 @@
 rootProject.name = 'springData'
 include 'Intro'
 include 'IntroSpringBootDatabaseConnection'
+include 'JdbcTemplateExample'
 
