@@ -516,4 +516,179 @@ Jbbc Call backs
             generic interface allowing number of operations on single CallableStatement
 
 
+Execution of plain SQL statements - JDBC Template
+----------------------------------------------
+1. JDBC Template allows execution of plain SQL statements with following
+   methods
+   1. query
+   2. queryForList
+      1. returns list of objects of declared type, `expects query to return
+         results with only one column`, otherwise
+         IncorrectResultSetColumnCountException will be thrown
+   3. queryForObject
+      1. returns single object, expects query to return only one record, if
+         this requirement is not matched
+         IncorrectResultSizeDataAccessException will be thrown
+   4. queryForMap
+      1. returns map for single row with keys representing column names
+         and values representing database record value, expects query to return only one
+         record, if this requirement is not matched
+         IncorrectResultSizeDataAccessException will be thrown
+   5. queryForRowSet
+      1. returns SqlRowSet object that contains metadata information
+         (like column names) and allows to read results data and iterate through records
+   6. execute
+   7. update
+   8. batchUpdate
+   9. Most of the methods above have many versions, allowing you to specify not only query
+      itself, but also parameters to the query and customer row mapper if required.
+   10. Jdbc Template returns objects, lists/map by using following:
+       1. objects – queryForObject – SingleColumnRowMapper for generic types and
+          RowMapper for custom types
+       2. lists – queryForList – SingleColumnRowMapper for generic types
+       3. maps – queryForMap – ColumnMapRowMapper for any query
+   11. Examples
+       ```java
+       //query
+       public List<Employee> findEmployees() {
+         return jdbcTemplate.query(
+                 "select employee_id, first_name, last_name, email, phone_number, hire_date, salary from employee",
+                 this::mapEmployee
+            );
+         }
+      
+       //queryForList
+       public List<String> findEmployeesEmails() {
+         return jdbcTemplate.queryForList("select email from employee", String.class);
+          }
+       
+        //OUT PUT - John,Jayvon, ...
+       
+       //queryForObject
+       public Employee findEmployeeWithHighestSalary() {
+         return jdbcTemplate.queryForObject(
+                 "select employee_id, first_name, last_name, email, phone_number, hire_date, salary from employee order by salary desc limit 1",
+                 this::mapEmployee
+         );
+       }
+        
+       //queryForObject - for Prepared statement
+       public Employee findEmployeeById(Integer id) {
+         return jdbcTemplate.queryForObject(
+                 "select employee_id, first_name, last_name, email, phone_number, hire_date, salary from employee where employee_id = ?",
+                 new Object[]{id},
+                 this::mapEmployee
+         );
+         }
+        //Output : findEmployeeEmail(1)
+                  //John.Doe@corp.com
+      
+       //queryForMap
+       public Map<String, Object> findEmployeeThatWasHiredLast() {
+         return jdbcTemplate.queryForMap(
+                 "select employee_id, first_name, last_name, email, phone_number, hire_date, salary from employee order by hire_date limit 1"
+         );
+         }
+       
+       //Output - {EMPLOYEE_ID=2, FIRST_NAME=Willow, LAST_NAME=Zhang, EMAIL=Willow.Zhang@corp.com, //PHONE_NUMBER=555-55-56, HIRE_DATE=2019-07-12, SALARY=80000}
+       
+       //queryForRowSet
+       public SqlRowSet findEmployeesEmailsAndPhones() {
+         return jdbcTemplate.queryForRowSet(
+                 "select email, phone_number from employee"
+         );
+        }
+      
+       //execute
+        public void insertNewDummyRecord() {
+         jdbcTemplate.execute(
+                 "insert into employee values(999, 'Dummy', 'Dummy', 'Dummy.Dummy@dummy.com', '111-11-11', '2019-06-05', 1)"
+         );
+         }
+      
+       //updata & batch Update
+       public int updateDummyRecord(Integer id, String firstName) {
+         return jdbcTemplate.update(
+                 "update employee set first_name = ? where employee_id = ?",
+                 new Object[]{firstName, id}
+         );
+         }
+      
+       public int[] updateRecordsWithDummyData() {
+         return jdbcTemplate.batchUpdate(
+                 "update employee set first_name = 'AAA' where employee_id = 1",
+                 "update employee set first_name = 'BBB' where employee_id = 2",
+                 "update employee set first_name = 'CCC' where employee_id = 3"
+         );
+        }
+    
+         ```
+
+JDBC template - acquire and release a connection
+---
+1. Connection lifecycle in JDBC Template depends on transactions being involved or not.
+2. If JDBC Template is used without transaction, then connection is acquired and
+   released for every method call. Reason for this strategy, is to minimize amount of
+   time when resource (connection) has to be held.
+3. If JDBC Template is used together with transaction, then DataSourceUtils which is
+   using TransactionSynchronizationManager will reuse connection between
+   method calls as long as transaction is not committed or rolled back. Reason for this
+   strategy is that connection cannot be closed when transaction is in progress, since
+   closing connection would also rollback any changes made.
+4. JDBC Template uses getConnection() method from DataSource class through
+   DataSourceUtils class. If DataSource is plain JDBC Connection source, then
+   connection is actually opened/closed, however if Connection Pool, like DBCP or C3P0
+   is used, then connection is not being opened/closed, however it is acquired or
+   released from/to the pool.
+
+Transactions
+----------------
+1. Transaction is an operation that consist of series of tasks, in which all of those tasks
+   should be performed, or none of the tasks should be performed. Those tasks are being
+   treated as one unit of work. If all tasks in transaction are successful, changes made by
+   those tasks are preserved, if at least one of the tasks is unsuccessful, changes made
+   by tasks that were already completed will be reverted and any tasks awaiting
+   execution will no be executed.
+2. Transaction should follow ACID principle:
+   1. Atomicity – All changes are applied or none changes are applied
+   2. Consistency – system should go from one valid state to other valid state, any
+      constraints on data should never be left in invalid state
+   3. Isolation – one transaction cannot affect other one, concurrent execution of
+      transaction should leave system in the same state as if sequential execution of
+      transaction would be performed
+   4. Durability – guarantees that if transaction has been committed, data will be
+      preserved, even in case of system/power failure
+3. a local vs global transaction
+   1. Global transaction is a kind of transaction that spans multiple transactional
+      resources. Those resources can be anything, but usually include databases (can
+      be more then one) and queues. In Java, popular standard for managing global
+      transaction is JTA, which is an API for using transaction system provided by
+      Application Server.
+   2. Local transaction are resource specific transaction, they do not span across
+      multiple transactional resources. Local transactions are much simpler than global
+      transaction however main disadvantages is lack of ability to treat series of tasks
+      dealing with multiple transactional resources such as databases or databases and
+      queues as single unit of work.
+   3. Global transaction will roll back the changes on all distributed databases that are involved in a transaction but in local it fails.
+
+transactions vs Spring
+---------------------
+1. Transaction is a cross cutting concern and in Spring it is implemented with usage
+   of @Transactional annotation.
+2. If @Transactional annotation is present on top of the method or entire class,
+   then each call to the method in the class will be proxied by
+   TransactionInterceptor and TransactionAspectSupport classes. Those
+   classes will interact with PlatformTransactionManager to commit
+   transaction upon successful method execution or rollback upon exception. Exact
+   behavior will be dependent on transaction propagation and isolation level
+   settings, which can be set in @Transactional annotation.
+3. Example
+   ```java
+   @Transactional
+    public void saveEmployeeInTransaction() {
+        employeeDao.saveEmployee(new Employee(1, "John", "Doe", "John.Doe@corp.com", "555-55-55", Date.valueOf("2019-06-05"), 70000));
+    }
+
+      ```
+
 
