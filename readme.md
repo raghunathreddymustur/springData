@@ -701,7 +701,108 @@ Defining a transaction in Spring
       interface `PlatformTransactionManager`, examples of transactions
       managers:
       1. DataSourceTransactionManager, JtaTransactionManager, JpaTransactionManager...etc
-   3. Use `@Transactional` annotation on top of classes or methods that should
+   3. Dependencies
+      ![img_2.png](img_2.png)
+   4. Example
+      ```java
+      // Config
+      
+      @Configuration
+      @EnableTransactionManagement
+      public class DataSourceConfiguration {
+
+      @Bean
+      public DataSource dataSource()
+      {
+        return new EmbeddedDatabaseBuilder()
+                .generateUniqueName(true)
+                .setScriptEncoding("UTF-8")
+                .addScript("db-schema.sql")
+                .build();
+      }
+
+      @Bean
+      @Autowired
+      public PlatformTransactionManager platformTransactionManager(DataSource dataSource)
+      {
+        return new DataSourceTransactionManager(dataSource);
+      }
+
+       }
+      
+      // Repo
+      @Repository
+      public class EmployeeDao {
+      private JdbcTemplate jdbcTemplate;
+
+      @Autowired
+      public void setDataSource(DataSource dataSource) {
+          jdbcTemplate = new JdbcTemplate(dataSource);
+      }
+      
+      public void saveEmployee(Employee employee) {
+        if (employee.getId() < 0)
+            throw new IllegalArgumentException("Employee Id has to be greater than zero");
+
+        int numberOfRecordsInserted = jdbcTemplate.update(
+                "insert into employee(employee_id, first_name, last_name, email, phone_number, hire_date, salary) " +
+                        "values (?, ?, ?, ?, ?, ?, ?)",
+                employee.getId(),
+                employee.getFirstName(),
+                employee.getLastName(),
+                employee.getEmail(),
+                employee.getPhoneNumber(),
+                employee.getHireDate(),
+                employee.getSalary()
+        );
+
+        if (numberOfRecordsInserted == 1)
+            System.out.println(String.format("Saved employee [%d]", employee.getId()));
+        else
+            throw new IllegalStateException(String.format("Expected 1 record to be inserted, instead retrieved [%d] number of records inserted", numberOfRecordsInserted));
+      }
+      
+      @SneakyThrows
+      private Employee mapEmployee(ResultSet resultSet, int i) throws SQLException {
+          return new Employee(
+         resultSet.getInt("employee_id"),
+         resultSet.getString("first_name"),
+         resultSet.getString("last_name"),
+         resultSet.getString("email"),
+         resultSet.getString("phone_number"),
+         resultSet.getDate("hire_date"),
+         resultSet.getFloat("salary")
+         );
+         }
+         }
+      
+      // Service
+      @Service
+      public class EmployeeService {
+        @Autowired
+        private EmployeeDao employeeDao;
+        public void saveEmployeesWithoutTransaction() {
+        System.out.println("Saving employees without transaction...");
+        saveEmployees();
+           }
+
+         @Transactional
+      public void saveEmployeesInTransaction() {
+      System.out.println("Saving employees with transaction...");
+      saveEmployees();
+      }
+
+      private void saveEmployees() {
+      employeeDao.saveEmployee(new Employee(1, "John", "Doe", "John.Doe@corp.com", "555-55-55", Date.   valueOf("2019-06-05"), 70000));
+      employeeDao.saveEmployee(new Employee(2, "Willow", "Zhang", "Willow.Zhang@corp.com", "555-55-56",    Date.valueOf("2019-07-12"), 80000));
+      employeeDao.saveEmployee(new Employee(3, "Jayvon", "Grant", "Jayvon.Grant@corp.com", "555-55-57",    Date.valueOf("2019-07-17"), 90000));
+      employeeDao.saveEmployee(new Employee(-1, "Shaylee", "Mcclure", "Shaylee.Mcclure@corp.com",    "555-55-58", Date.valueOf("2019-07-19"), 120000));
+      employeeDao.saveEmployee(new Employee(5, "Miley", "Krueger", "Miley.Krueger@corp.com", "555-55-59",    Date.valueOf("2019-07-20"), 110000));
+      }
+        
+         }
+        ```
+   5. Use `@Transactional` annotation on top of classes or methods that should
       involve transaction management
       1. @Transactional annotation can be used on top of classes or methods to
          enable transaction management for entire class or specified methods. When
@@ -728,7 +829,6 @@ Defining a transaction in Spring
          5. Read Only Flag
          6. Define which exception types will cause transaction rollback
          7. Define which exception types will not cause transaction rollback
-         8. 
 
 
 
