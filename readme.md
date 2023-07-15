@@ -653,9 +653,7 @@ Transactions
    1. Atomicity – All changes are applied or none changes are applied
    2. Consistency – system should go from one valid state to other valid state, any
       constraints on data should never be left in invalid state
-   3. Isolation – one transaction cannot affect other one, concurrent execution of
-      transaction should leave system in the same state as if sequential execution of
-      transaction would be performed
+   3. Isolation – one transaction cannot affect other one, when multiple transactions are executing parallley, the isolation level determines how many changes of one transaction are visible to other. 
    4. Durability – guarantees that if transaction has been committed, data will be
       preserved, even in case of system/power failure
 3. a local vs global transaction
@@ -697,13 +695,26 @@ Defining a transaction in Spring
    1. Enable transaction management by using
       `@EnableTransactionManagement` annotation on top of your Configuration
       class
-   2. Create bean method in configuration class that will return bean implementing
+   2. When @EnableTransactionManagement is used, TransactionInterceptor
+      and TransactionAspectSupport will be used to proxy each call to
+      @Transactional class or method, which will use
+      PlatformTransactionManager to manage transaction.
+   3. @EnableTransactionManagement allows you to specify following values:
+      1. Mode – sets advice mode for @Transactional annotation, indicates how calls to
+         methods should be intercepted, PROXY is default mode, you can switch it to more
+         advanced ASPECTJ weaving advice, which supports local calls
+      2. Order – indicates order of advice execution when more then one advice applies to
+         @Transactional join point
+      3. proxyTargetClass – indicates whether CGLIB Proxy classes should be created or if
+         JDK Proxies should be created (default), this field is used only when Mode is
+         set to PROXY
+   4. Create bean method in configuration class that will return bean implementing
       interface `PlatformTransactionManager`, examples of transactions
       managers:
       1. DataSourceTransactionManager, JtaTransactionManager, JpaTransactionManager...etc
-   3. Dependencies
+   5. Dependencies
       ![img_2.png](img_2.png)
-   4. Example
+   6. Example
       ```java
       // Config
       
@@ -802,7 +813,7 @@ Defining a transaction in Spring
         
          }
         ```
-   5. Use `@Transactional` annotation on top of classes or methods that should
+   7. Use `@Transactional` annotation on top of classes or methods that should
       involve transaction management
       1. @Transactional annotation can be used on top of classes or methods to
          enable transaction management for entire class or specified methods. When
@@ -829,6 +840,316 @@ Defining a transaction in Spring
          5. Read Only Flag
          6. Define which exception types will cause transaction rollback
          7. Define which exception types will not cause transaction rollback
+
+Isolation Levels
+---------------
+1. Transaction Isolation determines how changes made under one transaction are
+   visible in other transactions and to other users of the system. Higher isolation
+   level means that changes from one transaction are not visible and lower isolation
+   level means that changes from one transactions may “slip” into selects executed
+   under other transaction.
+2. Higher transaction isolation level make data being visible in more consistent way,
+   lower transaction isolation level makes data less consistent but increases overall
+   throughput and concurrency of the system.
+3. Most Relational Databases support 4 transaction levels:
+   1. Repeatable Read - Often used
+      1. Read is independent of all other parallel transaction
+         1. You will get same first read values even other parallel transactions have committed changes on that particular value
+         2. Multiple reads within same transaction are consistent
+         Example
+         ![img_3.png](img_3.png)
+   2. Read Committed
+      1. Reads within the same transaction always reads the fresh value committed by other transactions
+         1. Multiple reads within same transaction are inconsistent
+      2. Example
+         ![img_4.png](img_4.png)
+   3. Read Uncommitted
+      1. Reads even uncommitted values from other transaction
+         1. Dirty read problem
+         2. Example
+            ![img_5.png](img_5.png)
+   4. Serializable - more strict
+      1. Every read is a locking read and while one transaction read, other will have to wait untill transaction is committed or roll backed
+      2. Example
+         ![img_6.png](img_6.png)
+         After Commit
+         ![img_7.png](img_7.png)
+   5. In Spring Framework, you can use @Transactional annotation to set isolation
+      level.
+      ```java
+      @Transactional(isolation = Isolation.SERIALIZABLE)
+      @Transactional(isolation = Isolation.REPEATABLE_READ)
+      @Transactional(isolation = Isolation.READ_COMMITTED)
+      @Transactional(isolation = Isolation.READ_UNCOMMITTED)
+         ```
+
+Transaction propagation
+----------------------
+1. In Spring transactions, transaction propagation refers to the behavior of a transaction when it encounters an existing transaction context. It determines how the current transaction interacts with the existing transaction, if any.
+2. spring provides different transaction propagation options, which can be specified using the propagation attribute on the @Transactional annotation or in the transaction configuration. Here are some commonly used propagation options:
+3. Suppose we have two methods, methodA() and methodB(), both annotated with @Transactional in a Spring application. methodA() is already executing within a transaction context, and methodB() is called from within methodA().
+   ```java
+   @Transactional(propagation = Propagation.REQUIRED)
+   public void methodA() {
+   // Transactional logic
+   methodB();
+   }
+
+   @Transactional(propagation = Propagation.REQUIRED)
+   public void methodB() {
+   // Transactional logic
+   }
+   ```
+4. Transaction propagation can be defined in @Transactional annotation in
+propagation field as one of following options:
+   1. REQUIRED - support a current transaction, create a new one if none exists
+   2. SUPPORTS - support a current transaction, execute non-transactionally if none
+      exists
+   3. MANDATORY - support a current transaction, throw an exception if none exists
+   4. REQUIRES_NEW - create a new transaction, and suspend the current transaction if
+      one exists
+   5. NOT_SUPPORTED - execute non-transactionally, suspend the current transaction if
+      one exists
+   6. NEVER - execute non-transactionally, throw an exception if a transaction exists
+   7. NESTED - execute within a nested transaction if a current transaction exists,
+      behave like REQUIRED else
+   8. Example
+      ```java
+      @Repository
+      public class EmployeeDao {
+      @Transactional(propagation = REQUIRED)
+      public void requiredTransactionMethod() {
+      }
+
+        @Transactional(propagation = SUPPORTS)
+      public void supportsTransactionMethod() {
+      }
+
+      @Transactional(propagation = MANDATORY)
+      public void mandatoryTransactionMethod() {
+      }
+
+      @Transactional(propagation = REQUIRES_NEW)
+      public void requiresNewTransactionMethod() {
+      }
+
+      @Transactional(propagation = NOT_SUPPORTED)
+      public void notSupportedTransactionMethod() {
+      }
+
+      @Transactional(propagation = NEVER)
+      public void neverTransactionMethod() {
+      }
+
+      @Transactional(propagation = NESTED)
+      public void nestedTransactionMethod() {
+      }
+      }
+       ```
+@Transactional annotated method is calling another @Transactional annotated method on the same object instance
+   -------
+1. JDK Proxy and CGLIB Proxy in Spring Beans AOP do not support self invocation, so
+   when one method with @Transactional annotation calls different method
+   with @Transactional annotation from the same class, nothing happens,
+   transaction interceptor will not be called.
+2. To enable self invocation support, you need to configure Spring Aspects with
+   AspectJ, to do that you need to:
+   1. Have dependency to spring-aspects
+   2. Include aspectj-maven-plugin
+   3. Configure Transaction Support with
+      1. @EnableTransactionManagement(mode = AdviceMode.ASPECTJ)
+3. Example
+   ```java
+           <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aspects</artifactId>
+        </dependency>
+   
+        <plugin>
+                <groupId>com.github.m50d</groupId>
+                <artifactId>aspectj-maven-plugin</artifactId>
+                <version>1.11.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <source>${java.source.target.version}</source>
+                    <target>${java.source.target.version}</target>
+                    <complianceLevel>${java.source.target.version}</complianceLevel>
+                    <forceAjcCompile>true</forceAjcCompile>
+                    <aspectLibraries>
+                        <aspectLibrary>
+                            <groupId>org.springframework</groupId>
+                            <artifactId>spring-aspects</artifactId>
+                        </aspectLibrary>
+                    </aspectLibraries>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjtools</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjweaver</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+   
+            //config   
+            @Configuration
+            @EnableTransactionManagement(mode = AdviceMode.ASPECTJ)
+            public class DataSourceConfiguration { }
+
+   ```
+@Transactional Usage
+-------------
+1. @Transactional can be used on top of class or method, in classes or
+   interfaces. 
+2. If used on top of class, it applies to all public methods in this class.
+3. **If used on top of method, it needs to have public access modifier, if used on top
+   of protected / package-visible / private method, transaction management will
+   not be applied.**
+
+Declarative transaction management 
+-------------------
+1. Declarative transaction management means that instead of handling transactions
+   manually through the code, methods which should be executed in transactions
+   are declared with @Transactional annotation.
+2. Example
+   ```java
+   @Service
+   public class EmployeeService {
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Transactional
+    public void declarativeTransaction() {
+        // use dao to update data
+    }
+    
+    //manually writing the code 
+    public void manualTransaction() throws SQLException {
+        Connection connection = dataSource.getConnection();
+
+        connection.setAutoCommit(false);
+        connection.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+
+        try {
+            // use connection to update data on transaction
+
+            connection.commit();
+        } catch (SQLException e) {
+            connection.rollback();
+        } finally {
+            connection.close();
+        }
+    }
+   }
+    ```
+
+Default rollback policy
+--------------
+1. Default rollback policy in Spring Framework is set to automatic rollback, but only
+   when unchecked exception is being thrown from the method annotated with
+   @Transactional annotation.
+2. When checked exception is being thrown from
+   the method, transaction is not being rolled back.
+3. You can override this policy by setting rollbackFor /
+   rollbackForClassName or noRollbackFor / noRollbackForClassName
+   field in @Transactional annotation.
+4. Example
+   ```java
+   @Service
+   public class EmployeeService {
+
+    @Transactional
+    public void methodWithUncheckedExceptionCausingRollback() {
+        throw new IllegalArgumentException("test unchecked exception that will cause rollback");
+    }
+
+    @Transactional
+    public void methodWithCheckedExceptionNotCausingRollback() throws CustomException {
+        throw new CustomException("test checked exception that will not cause rollback");
+    }
+
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
+    public void methodWithUncheckedExceptionNotCausingRollback() {
+        throw new IllegalArgumentException("test unchecked exception that will not cause rollback because of noRollbackFor field");
+    }
+
+    @Transactional(rollbackFor = CustomException.class)
+    public void methodWithCheckedExceptionCausingRollback() throws CustomException {
+        throw new CustomException("test checked exception that will cause rollback because of rollbackFor field");
+    }
+    }
+
+     ```
+JUnit test - @Transaction
+-----------------------
+1. Default rollback policy in @Test methods annotated with @Transactional is
+   always rollback. This means that after test execution transaction will always be
+   rolled back. The reason for this is that each test method should be able to
+   change state of database or call other classes that will change state of the
+   database, however for the tests to be repeatable, changes should be reverted
+   after @Test method execution.
+
+2. You can change this behavior by using @Rollback annotation set to false.
+3. Example
+   ````java
+   @RunWith(SpringJUnit4ClassRunner.class)
+   @ContextConfiguration(classes = {Runner.class})
+   public class EmployeeServiceTest {
+
+    @Autowired
+    private EmployeeService employeeService;
+
+    @Test
+    @Transactional
+    public void shouldRollbackTransaction() {
+        employeeService.methodWithTransaction();
+
+        // ...
+    }
+
+    @Test
+    @Transactional
+    @Rollback(false)
+    public void shouldNotRollbackTransaction() {
+        employeeService.methodWithTransaction();
+
+        // ...
+    }
+    }
+   ````
+
+Why is the term "unit of work" so important and why does JDBC AutoCommit violate this pattern 
+------------------------
+1. Unit of work is a generic term to describe, set of tasks that are performing some
+   changes on the data, with assumption that all changes needs to be performed, or
+   no changes should be performed at all.
+2. In Relational Databases, Unit of Work can be represented by Database
+   Transaction, which Atomic nature describes “all-or-nothing” behavior described
+   above
+3. In context of JPA/Hibernate, Unit of Work tracks all changes made to the Data
+   Objects representing entries in the database, and once done, ORM figures out all
+   changes that needs to be applied to the database. This way amount of calls to
+   the database can be minimized by aggregating all changes into one call.
+4. JDBC AutoCommit violates Unit of Work, because it makes every SQL statement being
+   invoked in a separate transaction that is committed after SQL is executed, this makes
+   impossible to implement Unit of Work consisting of multiple SQL operations.
+5. Here Autocommit means not havings @Transaction annotation on database calls
+   1. Example
+      ![img_8.png](img_8.png)
+
+
 
 
 
