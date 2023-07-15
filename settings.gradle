@@ -3,4 +3,6 @@ include 'Intro'
 include 'IntroSpringBootDatabaseConnection'
 include 'JdbcTemplateExample'
 include 'Transactions'
+include 'spingJPA'
+include 'SpringBootJPA'
 

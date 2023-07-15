@@ -1151,6 +1151,155 @@ Why is the term "unit of work" so important and why does JDBC AutoCommit violate
 
 
 
+Spring - Working with JPA
+1. Following steps are required to work with JPA in Spring Framework:
+   1. Declare maven dependencies:
+      1. JPA API - javax.persistence:javax.persistence-api
+      2. Spring ORM - org.springframework:spring-orm
+      3. ORM of your choice, for example - org.hibernate:hibernate-core
+      4. Database Driver, for example - org.hsqldb: hsqldb
+      5. Optionally, but recommended, Spring Data JPA - org.springframework.data:spring-data-jpa
+   2. Define DataSource Bean
+   3. Define PlatformTransactionManager, in case of JPA JpaTransactionManager
+   4. Define EntityManagerFactoryBean
+      1. LocalContainerEntityManagerFactoryBean for standalone application
+      2. EntityManagerFactory from JNDI
+      3. LocalEntityManagerFactoryBean for Test purposes
+   5. Define @Entity classes with at least on @Id field
+   6. Define DAO classes, or use Spring Data JPA Repositories
+   7. Dependicies
+      ![img_9.png](img_9.png)
+   8. Example
+      ```java
+      //config
+      @Configuration
+      @EnableJpaRepositories(basePackages = {"com.spring.professional.exam.tutorial.module03.question21.dao"})
+      public class JpaConfiguration {
+      @Bean
+      @Autowired
+      public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+      LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
+      em.setDataSource(dataSource);
+      em.setPackagesToScan("com.spring.professional.exam.tutorial.module03.question21.ds");
 
+        JpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
+        em.setJpaVendorAdapter(vendorAdapter);
 
+        return em;
+       }
+
+       @Bean
+       public PlatformTransactionManager transactionManager(EntityManagerFactory emf) {
+           JpaTransactionManager transactionManager = new JpaTransactionManager();
+           transactionManager.setEntityManagerFactory(emf);
+
+           return transactionManager;
+         }
+        }
+      @Configuration
+      @EnableTransactionManagement
+      public class DataSourceConfiguration {
+
+          @Bean
+          public DataSource dataSource() {
+        return new EmbeddedDatabaseBuilder()
+                .generateUniqueName(true)
+                .setScriptEncoding("UTF-8")
+                .addScript("schema.sql")
+                .build();
+          }
+       }
+      //dao
+      public interface EmployeeDao extends CrudRepository<Employee, Integer> {
+          }
+      //pojo
+      public class Employee {
+      @Id
+      private int id;
+      private String firstName;
+      private String lastName;
+      private String email;
+      private String phoneNumber;
+      private Date hireDate;
+      private float salary;
+
+      @SuppressWarnings("unused")
+      public Employee() {
+      }
+      }
+     ```
+   
+JPA and JBCD Under same transaction
+------
+1. JPA in Spring uses JpaTransactionManager, which supports cases when
+DataSource is used directly, so it allows mixing JPA and JDBC code under one
+transaction.
+
+PlatformTransactionManager
+--------------------------
+1. JPA can work with following transaction managers:
+   1. JpaTransactionManager – recommended when working with one database and one Entity
+      Manager
+   2. JtaTransactionManager – recommended when working with multiple databases and Entity
+      Managers, or when working with multiple databases and other transactional resources, for example
+      one transaction needs to span Database and JMS Topi
+   3. Example
+      ![img_10.png](img_10.png)
+   4. Usage of JpaTransactionManager in case of multiple Databases / Transactional Resources / Entity
+      Managers will cause each transaction, span only one resource, this is why JtaTransactionManager is
+      required in this case.
+   5. Multiple Databases/Entity Managers Scenario with incorrectly used JpaTransactionManager
+      for this case use JtaTransactionManager
+   6. Example
+      ![img_11.png](img_11.png)
+
+Spring Boot Auto Config - JPA
+-----------------------------
+1. Spring Boot simplifies JPA setup by:
+   1. Providing spring-boot-starter-data-jpa dependency which includes all required
+      dependencies
+   2. Providing auto-configuration for JPA
+   3. Automatically defines PlatformTransactionManager, EntityManager and other
+      required beans
+   4. Allows Data Source to be configured via properties
+   5. Provides out-of-the-box support for Hikari Connection Pool
+   6. Provides default properties to JPA
+   7. Automatically creates DAO beans for Repositories
+   8. Example [SpringBootJPA/src/main/java/com/raghu/springboot/jpa](SpringBootJPA/src/main/java/com/raghu/springboot/jpa)
+   
+
+Repository interface - Spring
+---------------------------------
+1. Repository interface is a Java interface that describes Dao with expected behaviors, based on which
+   Spring Data will automatically generate Dao logic. Repository interface takes Domain Class and ID of
+   type to manage.
+2. Custom Repository interface needs to extend one of following interface:
+   1. Repository – basic marker repository
+   2. CrudRepository – adds generic methods for CRUD operations
+   3. PagingAndSortingRepository – adds findAll methods for paging/sorting
+   4. JpaRepository – JPA specific extension of Repository
+   5. Example
+      ```java
+      public interface EmployeeDao extends CrudRepository<Employee, Integer> {
+         Employee findByEmail(String email);
+
+         List<Employee> findByLastName(String lastName);
+
+         List<Employee> findBySalaryBetween(float min, float max);
+         }
+      
+      @Entity
+      @ToString
+      public class Employee {
+      @Id
+      private int id;
+      }
+      
+      //Framework generates Daologic automatically based interfacesfrom package pointed in //@EnableJpaRepositories
+      @Configuration
+      @EnableJpaRepositories(basePackages = {"com.spring.professional.exam.tutorial.module03.question25.dao"})
+      public class JpaConfiguration { 
+      }
+
+        ```
 
