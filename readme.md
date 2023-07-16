@@ -1278,7 +1278,16 @@ Repository interface - Spring
    2. CrudRepository – adds generic methods for CRUD operations
    3. PagingAndSortingRepository – adds findAll methods for paging/sorting
    4. JpaRepository – JPA specific extension of Repository
-   5. Example
+   5. To define Repository interface, you need to follow those steps:
+      1. Create Java Interface that extends one of: Repository, CrudRepository,
+         PagingAndSortingRepository, JpaRepository
+      2. Create class with @Entity annotation
+      3. Inside @Entity class, create a simple primary key annotated with @Id annotation or create class
+         that will represent complex key annotated with @EmbeddedId annotation at field level and
+         @Embeddable at key class definition level
+      4. Use @EnableJpaRepositories to point out package to scan for Repositories
+      5. Repository interface is an interface, not a class for Spring Data to be able to use JDK Dynamic Proxy to intercept all calls to repository and also to allow creation of custom base repositories for every Dao based on SimpleJpaRepository configured at @EnableJpaRepositories level.
+   6. Example
       ```java
       public interface EmployeeDao extends CrudRepository<Employee, Integer> {
          Employee findByEmail(String email);
@@ -1303,3 +1312,190 @@ Repository interface - Spring
 
         ```
 
+naming convention for finder methods in a Repository interface
+----------------------------------------------------------------
+1. Syntax
+   1. `find[limit]By[property/properties expression][comparison][ordering operator]`
+   2. `limit` – result of the query can be limited by usage of first/top keyword
+      1. Examples
+         1. findFirst10ByLastname
+         2. findFirstByOrderByLastnameAsc
+         3. findTop3ByLastname
+         4. findTopByOrderByAgeDesc
+   3. `property/properties expression` - result will be filtered based on property of entity, multiple
+      properties can be used with usage of `And, Or keyword`
+      1. Examples
+         1. findByLastnameAndFirstname
+         2. findByLastnameOrFirstname
+         3. findByFirstname
+   4. `comparison` – comparison mode can be specified after specifying property used for filtering
+      1. Examples
+         1. findByFirstnameEquals
+         2. findByStartDateBetween
+         3. findByAgeLessThan, findByAgeLessThanEqual
+         4. findByAgeGreaterThan, findByAgeGreaterThanEqual
+         5. findByStartDateBefore, findByStartDateAfter
+         6. findByStartDateBefore, findByStartDateAfter
+         7. findByAgeIsNull, findByAgeIsNotNull
+         8. findByFirstnameLike, findByFirstnameNotLike
+         9. findByFirstnameStartingWith, findByFirstnameEndingWith
+         10. findByFirstnameContaining
+         11. findByLastnameNot
+         12. findByAgeIn(Collection<Age> ages), findByAgeNotIn(Collection<Age> ages)
+         13. findByActiveTrue, findByActiveFalse
+         14. findByFirstnameIgnoreCase
+   5. `ordering operator` – optionally you can specify ordering operator at the end of method name
+      1. Example
+         1. findByLastnameOrderByFirstnameAsc
+         2. findByLastnameOrderByFirstnameDesc
+   6. Example
+      ```java
+      //dao 
+      public interface EmployeeDao extends CrudRepository<Employee, EmployeeKey> {
+      Employee findByFirstNameAndLastName(String firstName, String lastName);
+
+      List<Employee> findTop3ByOrderBySalaryDesc();
+
+      List<Employee> findByHireDateBetween(Date min, Date max);
+
+      List<Employee> findByOrderByHireDateDesc();
+      }
+      
+      //pojo
+      @Entity
+      @ToString
+      public class Employee {
+      @EmbeddedId
+      private EmployeeKey employeeKey;
+      private String email;
+      private String phoneNumber;
+      private Date hireDate;
+      private float salary;
+
+      @SuppressWarnings("unused")
+      public Employee() {
+          }
+      }
+      
+      @Embeddable
+      public class EmployeeKey implements Serializable {
+      private String firstName;
+      private String lastName;
+
+          @SuppressWarnings("unused")
+          public EmployeeKey() {
+          }
+      }
+       ```
+
+How are Spring Data repositories implemented by Spring at runtime
+-------------------------------------
+1. Spring Repositories are implemented at runtime by SimpleJpaRepository by default
+2. When application context is starting up, Spring will scan for all classes annotated with
+   @Configuration. When @Configuration class with @EnableJpaRepositories will be
+   detected, JpaRepositoriesRegistrar with JpaRepositoryConfigExtension will be used
+   to create beans for repositories in packages pointed out by basePackages field in
+   @EnableJpaRepositories. JpaRepositoryFactoryBean will use
+   JpaRepositoryFactory to create beans based on bean definitions and by default will create
+   instance of SimpleJpaRepository class for each Repository interface.
+3. Class used for implementation of Repository interface can be customized on:
+   1. Global level, by using repositoryBaseClass field from @EnableJpaRepositories
+      annotation - 
+      1. Example
+         ```java
+         @Configuration
+         @EnableJpaRepositories(
+         repositoryBaseClass = CustomBaseJpaRepository.class,
+         basePackages = {"com.spring.professional.exam.tutorial.module03.question28.dao"}
+         )
+         public class JpaConfiguration { 
+         ...
+         }
+         
+         //Custom class
+         public class CustomBaseJpaRepository<T, ID extends Serializable> extends SimpleJpaRepository<T, ID> {
+
+         private final EntityManager entityManager;
+
+         CustomBaseJpaRepository(JpaEntityInformation entityInformation, EntityManager entityManager) {
+         super(entityInformation, entityManager);
+         this.entityManager = entityManager;
+         }
+
+         public Employee findByFirstNameAndLastName(String firstName, String lastName) {
+         System.out.println("Starting custom implementation of findByFirstNameAndLastName from       CustomBaseJpaRepository...");
+
+              CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+
+              CriteriaQuery<Employee> criteria = criteriaBuilder.createQuery(Employee.class);
+              Root<Employee> employeeRoot = criteria.from(Employee.class);
+              criteria.where(
+                      criteriaBuilder.and(
+                        criteriaBuilder.equal(employeeRoot.get("lastName"), lastName),
+                        criteriaBuilder.equal(employeeRoot.get("firstName"), firstName)
+                      )
+              );
+
+              return entityManager.createQuery(criteria).getSingleResult();
+         }
+         }
+
+
+            ```
+   2. Single Dao/Repository by creating separate interface and Impl class for behavior that you
+      want to customize.
+      1. For Custom dao respective custom dao methods will be called, rest of the regular dao methods implemented by Spring SimpleJpaRepository methods will be called.
+         1. Example
+            ```java
+            //custom dao
+            public interface CustomEmployeeDao extends CrudRepository<Employee, Integer>, CustomEmployeeFindRepository {
+                }
+            public interface CustomEmployeeFindRepository {
+            Employee findByFirstNameAndLastName(String firstName, String lastName);
+            }
+         
+            public class CustomEmployeeFindRepositoryImpl implements CustomEmployeeFindRepository {
+            @Autowired
+            private EntityManager entityManager;
+
+            @Override
+            public Employee findByFirstNameAndLastName(String firstName, String lastName) {
+            System.out.println("Starting custom implementation of findByFirstNameAndLastName from CustomEmployeeFindRepositoryImpl...");
+
+                 CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+
+                 CriteriaQuery<Employee> criteria = criteriaBuilder.createQuery(Employee.class);
+                 Root<Employee> employeeRoot = criteria.from(Employee.class);
+                 criteria.where(
+                   criteriaBuilder.and(
+                           criteriaBuilder.equal(employeeRoot.get("firstName"), firstName),
+                           criteriaBuilder.equal(employeeRoot.get("lastName"), lastName)
+                   )
+                 );
+
+                 return entityManager.createQuery(criteria).getSingleResult();
+            }
+            }
+            //regular dao
+            public interface EmployeeDao extends CrudRepository<Employee, Integer> {
+             Employee findByFirstNameAndLastName(String firstName, String lastName);
+                 }
+             ```
+
+
+@Query
+-------
+1. @Query annotation can be used on top of Repository method, and with it you can specify
+   query that should be used by JPA. When declaring one on top of finder method, specified
+   query will be used, instead of generating one automatically based on finder method name.
+2. Using @Query annotation allows you to achieve more control and flexibility of the JPA
+   query that will be executed.
+   1. Example
+      ```java
+      @Query("select e from Employee e where e.firstName = ?1 and e.lastName = ?2")
+      Employee findByFirstNameAndLastName(String firstName, String lastName);
+      
+       ```
+
+
+      
